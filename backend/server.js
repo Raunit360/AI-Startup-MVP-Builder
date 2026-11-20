@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 
 const express = require('express');
@@ -15,11 +16,13 @@ const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
+
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || 'http://localhost:5173';
 
-// 1. Security HTTP Headers
+// 1. Security headers
 app.use(helmet());
 
 // 2. CORS configuration
@@ -33,11 +36,17 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server) or in whitelist
-      if (!origin || allowedOrigins.includes(origin) || NODE_ENV !== 'production') {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        NODE_ENV !== 'production'
+      ) {
         return callback(null, true);
       }
-      return callback(new Error(`CORS policy does not allow access from origin ${origin}`));
+
+      return callback(
+        new Error(`CORS policy does not allow access from origin ${origin}`)
+      );
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -45,18 +54,16 @@ app.use(
   })
 );
 
-// 3. Request Logging
-if (NODE_ENV === 'production') {
-  app.use(morgan('combined'));
-} else {
-  app.use(morgan('dev'));
-}
+// 3. Request logging
+app.use(
+  morgan(NODE_ENV === 'production' ? 'combined' : 'dev')
+);
 
-// 4. Body Parsers
+// 4. Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 5. Root Health Check Endpoint
+// 5. Root health check
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
@@ -68,12 +75,22 @@ app.get('/', (req, res) => {
   });
 });
 
-// 6. Mount API Routes
+// 6. Connect to MongoDB before handling API requests
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 7. Mount API routes
 app.use('/api/projects', projectRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-// 7. Handle 404 for unknown endpoints
+// 8. Handle unknown endpoints
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -84,38 +101,30 @@ app.use((req, res) => {
   });
 });
 
-// 8. Centralized Error Handling Middleware
+// 9. Centralized error handler
 app.use(errorHandler);
 
-// 9. Database Connection & Server Bootstrap
-const startServer = async () => {
-  try {
-    // Connect to MongoDB with retry logic
-    await connectDB();
-
-    app.listen(PORT, () => {
-      console.log('====================================================');
-      console.log(`🚀 AI Startup MVP Builder Backend running`);
-      console.log(`📡 Port:        ${PORT}`);
-      console.log(`🌍 Environment: ${NODE_ENV}`);
-      console.log(`🔗 Local URL:   http://localhost:${PORT}`);
-      console.log(`💻 Frontend:    ${FRONTEND_URL}`);
-      console.log(`📜 API Endpoints:`);
-      console.log(`   - GET  /`);
-      console.log(`   - CRUD /api/projects`);
-      console.log(`   - POST /api/projects/:id/generate-plan`);
-      console.log(`   - GET  /api/projects/:id/plan`);
-      console.log(`   - POST /api/ai/analyze`);
-      console.log(`   - GET  /api/dashboard/stats`);
-      console.log('====================================================');
+// 10. Start local server only when running directly
+if (require.main === module) {
+  connectDB()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log('========================================');
+        console.log('AI Startup MVP Builder Backend running');
+        console.log(`Port: ${PORT}`);
+        console.log(`Environment: ${NODE_ENV}`);
+        console.log(`Frontend: ${FRONTEND_URL}`);
+        console.log(`Local URL: http://localhost:${PORT}`);
+        console.log('========================================');
+      });
+    })
+    .catch((error) => {
+      console.error(
+        `[Server Error] ${error.message}`
+      );
+      process.exit(1);
     });
-  } catch (error) {
-    console.error(`[Server Error] Critical error during server startup: ${error.message}`);
-    process.exit(1);
-  }
-};
+}
 
-// Start application
-startServer();
-
+// Export Express app for Vercel
 module.exports = app;

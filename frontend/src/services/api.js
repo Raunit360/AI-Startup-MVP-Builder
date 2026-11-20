@@ -2,11 +2,11 @@
 import axios from 'axios';
 
 /**
- * Axios instance configured for API requests
+ * Axios instance configured for local and production API requests
  */
 const api = axios.create({
-  baseURL: '/api',
-  timeout: 45000, // 45 seconds for normal API requests
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -21,7 +21,6 @@ api.interceptors.response.use(
     let message = 'An unexpected error occurred. Please try again.';
 
     if (error.response) {
-      // Backend returned an error response
       const resData = error.response.data;
 
       if (resData?.error?.message) {
@@ -96,7 +95,6 @@ export const deleteProject = async (id) => {
 
 // Generate MVP Plan
 // Uses a 3-minute timeout because Gemini AI generation takes longer.
-// No request body is required.
 export const generatePlan = async (id) => {
   return await api.post(
     `/projects/${id}/generate-plan`,
